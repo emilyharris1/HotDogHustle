@@ -1,3 +1,5 @@
+# Hot Dog Hustle
+
 Hot Dog Hustle is an interactive Processing game connected to an Arduino-based input system. Players physically squeeze ketchup and mustard bottles (each with pressure sensors) to match condiment orders on a moving hot dog. The project evolved significantly across four versions. Each iteration focused on improving usability, gameplay clarity, visual design, and sensor responsiveness.
 
 Version 1 - Basic Functionality & Proof of Concept
