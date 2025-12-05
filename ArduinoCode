@@ -1,0 +1,19 @@
+int ketchupPin = A1;
+int mustardPin = A0;
+int ketchupReading;
+int mustardReading;
+
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  ketchupReading = analogRead(ketchupPin);
+  mustardReading = analogRead(mustardPin);
+  
+  Serial.print(ketchupReading);
+  Serial.print(",");
+  Serial.println(mustardReading);
+
+  delay(100);
+}
