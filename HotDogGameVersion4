@@ -1,0 +1,351 @@
+import processing.serial.*;
+PFont titleFont1, titleFont2, regularFont1, regularFont2;
+PImage hotdogImg, ketchupBottleImg, mustardBottleImg, tableTopImg, bkghotdogImg, whiteImg;
+
+Serial myPort;
+int ketchup = 0;
+int mustard = 0;
+
+boolean gameRunning = false;
+boolean gamePaused = false;
+
+float hotdogX = -200;
+float hotdogSpeed = 5;
+int score = 0;
+
+int popupPoints = 0;
+int popupStartTime = 0;
+boolean showPopup = false;
+float popupY = 55;
+float popupAlpha = 255;
+color popupColor = color(0,255,0);
+
+float ketchupLevel = 0;
+float mustardLevel = 0;
+int targetKetchup = 0;
+int targetMustard = 0;
+boolean equalMixOrder = false;
+boolean plainDogOrder = false;
+
+float bottleOffsetY = 50;
+float ketchupOffsetX = 60;
+float mustardOffsetX = 160;
+
+ArrayList<PVector> mustardDots;
+float mustardNextRelX = 0;
+float mustardStartXOffset = 10;
+float mustardMaxX = 755;
+
+float mustardPhase = 0;
+float mustardAmplitude = 15;
+float mustardBaseY = 455;
+float mustardStep = 0.25;
+
+ArrayList<PVector> ketchupDots;
+float ketchupNextRelX = 0;
+float ketchupStartXOffset = 10;
+float ketchupMaxX = 755;
+
+float ketchupPhase = PI;
+float ketchupAmplitude = 15;
+float ketchupBaseY = 455;
+float ketchupStep = 0.25;
+
+String orderText = "";
+
+void setup() {
+  size(900,600);
+  hotdogImg = loadImage("Hotdog.png");
+  ketchupBottleImg = loadImage("KetchupBottle.png");
+  mustardBottleImg = loadImage("MustardBottle.png");
+  tableTopImg = loadImage("tableTop.jpg");
+
+  myPort = new Serial(this, Serial.list()[2], 9600);
+  myPort.bufferUntil('\n');
+
+  mustardDots = new ArrayList<PVector>();
+  ketchupDots = new ArrayList<PVector>();
+  newOrder();
+
+  titleFont1 = createFont("SportPulseDemo-Italic.otf", 55);
+  regularFont1 = createFont("Lato-Regular.ttf", 20);
+  regularFont2 = createFont("Lato-Bold.ttf", 20);
+}
+
+void draw(){
+  imageMode(CORNER);
+  background(242,227,196);
+  image(tableTopImg, -100,0,1100,700);
+
+  if(!gameRunning){ startScreen(); return; }
+  if(gamePaused){ pauseScreen(); return; }
+
+  hotdogSpeed += 0.0005;
+  hotdogX += hotdogSpeed;
+
+  pushMatrix();
+  translate(hotdogX+120,460);
+  rotate(radians(25));
+  imageMode(CENTER);
+  image(hotdogImg,0,0,300,150);
+  popMatrix();
+
+  drawBottlesAndMustardDots(hotdogX);
+
+  fill(0);
+  rect(0,0,width,80);
+  fill(255);
+  textFont(regularFont2);
+  textAlign(LEFT);
+  text("Order: "+orderText,100, 50);
+  textAlign(RIGHT);
+  text("Score: "+score,width-150, 50);
+
+  if(showPopup){
+    int popupDuration = 2000;
+    int elapsed = millis() - popupStartTime;
+    if(elapsed < popupDuration){
+      fill(popupColor,popupAlpha);
+      textSize(32);
+      text((popupPoints>0?"+":"")+popupPoints,850,popupY);
+      popupY -= 0.5;
+      popupAlpha = map(elapsed,0,popupDuration,255,0);
+    } else showPopup = false;
+  }
+
+  if(hotdogX > width - 150){
+    checkOrder();
+    newOrder();
+  }
+}
+
+void serialEvent(Serial myPort){
+  String inString = myPort.readStringUntil('\n');
+  if(inString!=null){
+    inString = trim(inString);
+    String[] parts = split(inString, ',');
+    if(parts.length==2){
+      ketchup = int(parts[1]);
+      mustard = int(parts[0]);
+    }
+  }
+}
+
+void drawBottlesAndMustardDots(float baseX){
+  imageMode(CENTER);
+
+  float ketchupX = baseX + ketchupOffsetX;
+  float ketchupY = 370 - bottleOffsetY;
+  float mustardX = baseX + mustardOffsetX;
+  float mustardY = 370 - bottleOffsetY;
+
+  pushMatrix();
+  translate(ketchupX,ketchupY);
+  rotate(PI);
+  image(ketchupBottleImg,0,0,200,200);
+  popMatrix();
+
+  pushMatrix();
+  translate(mustardX,mustardY);
+  rotate(PI);
+  image(mustardBottleImg,0,0,200,180);
+  popMatrix();
+
+  if(ketchup > 20) ketchupLevel += map(ketchup, 10, 200, 0, 5);
+  if(mustard > 20) mustardLevel += map(mustard, 10, 200, 0, 5);
+  ketchupLevel = constrain(ketchupLevel,0,130);
+  mustardLevel = constrain(mustardLevel,0,130);
+
+  if (mustard > 20) {
+      float nextAbsX = baseX + mustardNextRelX;
+      if (nextAbsX <= mustardMaxX && frameCount % 1 == 0) {
+          float y = mustardBaseY + sin(mustardPhase) * mustardAmplitude;
+          mustardDots.add(new PVector(mustardNextRelX, y));
+          mustardNextRelX += 3;
+          mustardPhase += mustardStep;
+      }
+  }
+
+  if(ketchup > 20){
+      float nextAbsX = baseX + ketchupNextRelX;
+  
+      if(nextAbsX <= ketchupMaxX && frameCount % 1 == 0) {
+          float y =ketchupBaseY + sin(ketchupPhase) * ketchupAmplitude;
+          ketchupDots.add(new PVector(ketchupNextRelX, y));
+          ketchupNextRelX += 3;
+          ketchupPhase += ketchupStep;
+      }
+  }
+
+  //  mustard + ketchup dots
+  noStroke();
+  fill(255,220,0);
+  for (PVector v : mustardDots){
+    float screenX = baseX + v.x;
+    ellipse(screenX, v.y, 5, 5);
+  }
+
+  fill(255, 50, 50);
+  for (PVector v : ketchupDots){
+    float screenX = baseX + v.x;
+    ellipse(screenX, v.y, 5, 5);
+  }
+}
+
+void newOrder(){
+  hotdogX = -200;
+  ketchupLevel = 0;
+  mustardLevel = 0;
+
+  mustardDots.clear();
+  mustardPhase = 0;
+  mustardNextRelX = 0;
+
+  ketchupDots.clear();
+  ketchupPhase = PI;
+  ketchupNextRelX = 0;
+
+  int choice = int(random(6));
+  equalMixOrder = false;
+  plainDogOrder = false;
+
+  if(choice==0){
+    targetKetchup = 120; targetMustard=0;
+    orderText="Heavy ketchup!";
+  } 
+  else if(choice==1){
+    targetKetchup=0; targetMustard=120;
+    orderText="Heavy mustard!";
+  } 
+  else if(choice==2){
+    targetKetchup=30; targetMustard=120;
+    orderText="Light ketchup & heavy mustard";
+  } 
+  else if(choice==3){
+    targetKetchup=120; targetMustard=30;
+    orderText="Light mustard & heavy ketchup";
+  } 
+  else if(choice==4){
+    targetKetchup=80; targetMustard=80;
+    equalMixOrder=true;
+    orderText="Equal mix!";
+  } 
+  else {
+    targetKetchup=0; targetMustard=0;
+    plainDogOrder=true;
+    orderText="Plain dog!";
+  }
+}
+
+void checkOrder(){
+  int diffK = abs(int(ketchupLevel) - targetKetchup);
+  int diffM = abs(int(mustardLevel) - targetMustard);
+  int pointsEarned = 0;
+
+  if(plainDogOrder){
+    if(ketchupLevel<=10 && mustardLevel<=10) pointsEarned=10;
+    else if(ketchupLevel<=20 && mustardLevel<=20) pointsEarned=5;
+  }
+  else if(equalMixOrder){
+    if(diffK<=30 && diffM<=30) pointsEarned=10;
+    else if(diffK<=50 && diffM<=50) pointsEarned=5;
+  }
+  else {
+    if(diffK<=25 && diffM<=25) pointsEarned=10;
+    else if(diffK<=50 && diffM<=50) pointsEarned=5;
+  }
+
+  if(pointsEarned>0){
+    score += pointsEarned;
+    popupPoints=pointsEarned;
+    popupColor=color(0,255,0);
+  } 
+  else if(diffK>70 || diffM>70){
+    score -= 2;      
+    popupPoints=-2;
+    popupColor=color(255,0,0);
+  }
+  else {
+    popupPoints=0;
+    popupColor=color(150);
+  }
+
+  if(popupPoints!=0){
+    popupY=55;
+    popupAlpha=255;
+    popupStartTime=millis();
+    showPopup=true;
+  }
+}
+
+void startScreen() {
+  fill(0);
+  bkghotdogImg = loadImage("HotdogBackground.jpg");
+  whiteImg = loadImage("WhiteImg.png");
+  image(bkghotdogImg, 0, -110, 900, 900);
+  tint(255, 220);
+  imageMode(CENTER);
+  image(whiteImg, width/2, height/2, 600, 210);
+  imageMode(CORNER);
+  tint(255);
+  textAlign(CENTER);
+  textSize(36);
+  textFont(titleFont1);
+  text("Hot Dog Hustle", width/2, height/2 - 40);
+  textSize(20);
+  textFont(regularFont1);
+  text("Squeeze ketchup and mustard bottles to match the orders!", width/2, height/2);
+  text("Press p to pause", width/2, height/2 + 35);
+  text("Press SPACE to start", width/2, height/2 + 75);
+}
+
+void pauseScreen() {
+  noStroke();
+  fill(0, 100);
+  rect(0, 0, width, height);
+  
+  hotdogImg = loadImage("Hotdog.png");
+  drawHotdog(100, 0, radians(0));
+  drawHotdog(600, 0, radians(0));
+  drawHotdog(100, 420, radians(0));
+  drawHotdog(600, 420, radians(0));
+  drawHotdog(30, 210, radians(50));
+  drawHotdog(630, 210, radians(50));
+
+  fill(255);
+  stroke(0);
+  strokeWeight(3);
+  rect(width/2 - 200, height/2 - 120, 400, 240, 20);
+
+  textAlign(CENTER);
+  fill(0);
+  textSize(42);
+  textFont(titleFont1);
+  text("Game Paused", width/2, height/2 - 40);
+
+  textSize(20);
+  textFont(regularFont1);
+  text("Press p to unpause", width/2, height/2 + 10);
+  text("Press r to restart", width/2, height/2 + 50);
+}
+
+void keyPressed(){
+  if(key==' ') gameRunning=true;
+  if(key=='p'||key=='P') gamePaused=!gamePaused;
+  if(key=='r'||key=='R'){
+    score=0;
+    newOrder();
+    hotdogX=-200;
+    gameRunning=false;
+    gamePaused=false;
+  }
+}
+
+void drawHotdog(float x, float y, float r) {
+  pushMatrix();
+  translate(x + 120, y + 90);
+  rotate(r);
+  imageMode(CENTER);
+  image(hotdogImg, 0, 0, 200, 100);
+  popMatrix();
+}
